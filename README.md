@@ -63,15 +63,17 @@ Before you begin, ensure you have the following installed:
 
 3. **Configure the backend URL** (if needed)
 
-   The application is configured to connect to a Flask backend at `http://127.0.0.1:5000`.
+The application reads the backend URL from `REACT_APP_API_URL`.
 
-   If your backend runs on a different URL, update it in `src/utils/api.js`:
+For local development, you can leave it unset and it will fall back to `http://127.0.0.1:5000`.
 
-   ```javascript
-   const api = axios.create({
-     baseURL: "http://your-backend-url:port",
-   });
-   ```
+For Vercel, set `REACT_APP_API_URL` to your Render backend URL, for example:
+
+```bash
+REACT_APP_API_URL=https://your-backend.onrender.com
+```
+
+The shared axios client is configured in `src/utils/api.js`.
 
 ## 🎬 Running the Application
 
@@ -142,6 +144,24 @@ This frontend requires a Flask backend to function. The backend should provide t
    ```
 
 Make sure your Flask backend is running on `http://127.0.0.1:5000` before starting the frontend.
+
+## 🌍 Deployment Notes
+
+If you deploy the frontend to Vercel and the backend to Render:
+
+1. Add `REACT_APP_API_URL` in Vercel with your Render backend URL.
+2. Enable CORS on the Flask backend so your Vercel domain can make requests to Render.
+3. Redeploy the Vercel app after updating the environment variable.
+
+Typical Flask CORS setup on Render looks like this:
+
+```python
+from flask_cors import CORS
+
+CORS(app, origins=["https://your-vercel-app.vercel.app"])
+```
+
+If you are testing locally, `http://localhost:3000` can still call `http://127.0.0.1:5000` directly.
 
 ## 📁 Project Structure
 

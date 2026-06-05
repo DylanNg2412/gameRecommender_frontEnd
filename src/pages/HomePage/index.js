@@ -6,9 +6,6 @@ import {
   Box,
   Card,
   CardContent,
-  Switch,
-  FormControlLabel,
-  CircularProgress,
   Autocomplete,
   createTheme,
   ThemeProvider,
@@ -18,15 +15,33 @@ import {
   Alert,
   Snackbar,
   Fade,
+  Skeleton,
+  Tooltip,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import RocketLaunchIcon from "@mui/icons-material/RocketLaunch";
 import SportsEsportsIcon from "@mui/icons-material/SportsEsports";
-import StarIcon from "@mui/icons-material/Star";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import AttachMoneyIcon from "@mui/icons-material/AttachMoney";
-import { useState, useEffect } from "react";
-import axios from "axios";
+import LightModeIcon from "@mui/icons-material/LightMode";
+import DarkModeIcon from "@mui/icons-material/DarkMode";
+import ChatBubbleOutlineIcon from "@mui/icons-material/ChatBubbleOutline";
+import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
+import {
+  useState,
+  useEffect,
+  useDeferredValue,
+  useMemo,
+  useCallback,
+} from "react";
+import api from "../../utils/api";
+
+const QUICK_PICKS = [
+  "Hollow Knight",
+  "Stardew Valley",
+  "Dark Souls",
+  "Portal 2",
+];
 
 export default function HomePage() {
   const [selectedGame, setSelectedGame] = useState("");
@@ -42,101 +57,121 @@ export default function HomePage() {
     severity: "info",
   });
 
+  const deferredInputValue = useDeferredValue(inputValue);
+
+  const visibleGameOptions = useMemo(() => {
+    const query = deferredInputValue.trim().toLowerCase();
+    if (!query) return gameOptions.slice(0, 25);
+    return gameOptions
+      .filter((g) => g.toLowerCase().includes(query))
+      .slice(0, 25);
+  }, [gameOptions, deferredInputValue]);
+
   const theme = createTheme({
     palette: {
       mode: darkMode ? "dark" : "light",
-      primary: {
-        main: darkMode ? "#bb86fc" : "#6200ea",
-      },
-      secondary: {
-        main: darkMode ? "#03dac6" : "#00bfa5",
-      },
+      primary: { main: darkMode ? "#9B8FE8" : "#4A3FB5" },
+      secondary: { main: darkMode ? "#5EC4A8" : "#0F6E56" },
       background: {
-        default: darkMode ? "#121212" : "#f5f5f5",
-        paper: darkMode ? "#1e1e1e" : "#ffffff",
+        default: darkMode ? "#0F0F13" : "#F4F3FF",
+        paper: darkMode ? "#1A1A24" : "#FFFFFF",
       },
+      success: { main: "#3B6D11" },
+      warning: { main: "#854F0B" },
+      error: { main: "#A32D2D" },
     },
     typography: {
-      fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
-      h3: {
-        fontWeight: 700,
-      },
-      h6: {
-        fontWeight: 600,
-      },
+      fontFamily: '"DM Sans", "Roboto", "Helvetica", sans-serif',
+      h3: { fontWeight: 700, letterSpacing: "-0.5px" },
+      h5: { fontWeight: 600 },
+      h6: { fontWeight: 600 },
     },
-    shape: {
-      borderRadius: 12,
+    shape: { borderRadius: 12 },
+    components: {
+      MuiCard: {
+        styleOverrides: {
+          root: {
+            border: darkMode
+              ? "0.5px solid rgba(255,255,255,0.08)"
+              : "0.5px solid rgba(0,0,0,0.08)",
+            boxShadow: "none",
+          },
+        },
+      },
+      MuiButton: {
+        styleOverrides: {
+          root: { textTransform: "none", fontWeight: 500 },
+        },
+      },
     },
   });
-
-  const toggleDarkMode = () => {
-    setDarkMode(!darkMode);
-  };
 
   const showNotification = (message, severity = "info") => {
     setNotification({ open: true, message, severity });
   };
 
   const handleCloseNotification = () => {
-    setNotification({ ...notification, open: false });
+    setNotification((n) => ({ ...n, open: false }));
   };
 
-  // Fetch the list of game options from the backend
   useEffect(() => {
-    const getGames = async () => {
-      try {
-        const response = await axios.get("http://127.0.0.1:5000/games");
-        if (response.data.games) {
-          // Backend now returns array of strings directly
-          setGameOptions(response.data.games);
-        }
-      } catch (error) {
-        console.error("Error fetching game options:", error);
+    api
+      .get("/games")
+      .then((res) => {
+        if (res.data.games) setGameOptions(res.data.games);
+      })
+      .catch(() =>
         showNotification(
-          "Failed to load game options. Please refresh the page.",
-          "error"
-        );
-      }
-    };
-    getGames();
+          "Failed to load game options. Please refresh.",
+          "error",
+        ),
+      );
   }, []);
 
-  // Handle recommendations
-  const handleRecommend = async () => {
-    if (selectedGame || inputValue) {
-      const gameName = selectedGame || inputValue;
+  const handleRecommend = useCallback(
+    async (gameName) => {
+      const name = gameName || selectedGame || inputValue;
+      if (!name) {
+        showNotification("Please select or type a game first.", "warning");
+        return;
+      }
+      setInputValue(name);
+      setSelectedGame(name);
       setIsLoading(true);
+      setShowRecommendations(true);
       try {
-        const response = await axios.post("http://127.0.0.1:5000/recommend", {
-          selectedGame: gameName,
-        });
-        setRecommendations(response.data.recommendations || []);
-        setShowRecommendations(true);
-        if (response.data.recommendations?.length > 0) {
+        const response = await api.post("/recommend", { selectedGame: name });
+        const recs = response.data.recommendations || [];
+        setRecommendations(recs);
+        if (recs.length > 0) {
           showNotification(
-            `Found ${response.data.recommendations.length} recommendations! `,
-            "success"
+            `Found ${recs.length} recommendations for "${name}"`,
+            "success",
           );
         }
-      } catch (error) {
+      } catch {
         showNotification(
-          "Failed to fetch recommendations.  Please try again.",
-          "error"
+          "Failed to fetch recommendations. Please try again.",
+          "error",
         );
         setRecommendations([]);
       } finally {
         setIsLoading(false);
       }
-    } else {
-      showNotification("Please select a game!", "warning");
-    }
+    },
+    [selectedGame, inputValue],
+  );
+
+  const getScoreBg = (score) => {
+    if (score >= 80) return darkMode ? "#1a2e0f" : "#EAF3DE";
+    if (score >= 60) return darkMode ? "#2e1f0a" : "#FAEEDA";
+    return darkMode ? "#2e0f0f" : "#FCEBEB";
   };
 
-  const getScoreColor = (score) => {
-    if (score >= 80) return "success";
-    if (score >= 60) return "warning";
-    return "error";
+  const getScoreText = (score) => {
+    if (score >= 80) return darkMode ? "#8BC34A" : "#3B6D11";
+    if (score >= 60) return darkMode ? "#FFA726" : "#854F0B";
+    return darkMode ? "#EF5350" : "#A32D2D";
   };
 
   return (
@@ -145,345 +180,540 @@ export default function HomePage() {
         sx={{
           minHeight: "100vh",
           backgroundColor: theme.palette.background.default,
-          transition: "background-color 0.3s ease",
+          transition: "background-color 0.3s",
         }}
       >
-        {/* Header */}
+        {/* Top Bar */}
         <Box
           sx={{
-            background: darkMode
-              ? "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
-              : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-            color: "white",
-            py: 6,
+            backgroundColor: theme.palette.background.paper,
+            borderBottom: darkMode
+              ? "0.5px solid rgba(255,255,255,0.08)"
+              : "0.5px solid rgba(0,0,0,0.07)",
             px: 3,
-            boxShadow: 3,
+            py: 1.5,
           }}
         >
           <Container maxWidth="lg">
-            <Grid container alignItems="center" justifyContent="space-between">
-              <Grid item xs={12} md={8}>
-                <Box display="flex" alignItems="center" gap={2} mb={2}>
-                  <SportsEsportsIcon sx={{ fontSize: 48 }} />
-                  <Typography variant="h3" component="h1">
+            <Box
+              display="flex"
+              alignItems="center"
+              justifyContent="space-between"
+            >
+              <Box display="flex" alignItems="center" gap={1.5}>
+                <Box
+                  sx={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: "10px",
+                    background: "#3C3489",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <SportsEsportsIcon sx={{ color: "#EEEDFE", fontSize: 20 }} />
+                </Box>
+                <Box>
+                  <Typography
+                    variant="body1"
+                    fontWeight={600}
+                    lineHeight={1.2}
+                    sx={{ color: darkMode ? "#EEEDFE" : "#1F1C3D" }}
+                  >
                     Game Finder
                   </Typography>
+                  <Typography
+                    variant="caption"
+                    lineHeight={1}
+                    sx={{
+                      color: darkMode
+                        ? "rgba(238, 237, 254, 0.72)"
+                        : "text.secondary",
+                    }}
+                  >
+                    Discover your next favorite
+                  </Typography>
                 </Box>
-                <Typography variant="h6" sx={{ opacity: 0.9 }}>
-                  Discover your next favorite game based on what you love
-                </Typography>
-              </Grid>
-              <Grid
-                item
-                xs={12}
-                md={4}
-                textAlign={{ xs: "left", md: "right" }}
-                mt={{ xs: 2, md: 0 }}
+              </Box>
+
+              <Tooltip
+                title={
+                  darkMode ? "Switch to light mode" : "Switch to dark mode"
+                }
               >
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={darkMode}
-                      onChange={toggleDarkMode}
-                      sx={{
-                        "& .MuiSwitch-thumb": {
-                          backgroundColor: "white",
-                        },
-                      }}
+                <Box
+                  onClick={() => setDarkMode(!darkMode)}
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 1,
+                    cursor: "pointer",
+                    px: 1.5,
+                    py: 0.75,
+                    borderRadius: "8px",
+                    border: darkMode
+                      ? "0.5px solid rgba(255,255,255,0.12)"
+                      : "0.5px solid rgba(0,0,0,0.1)",
+                    "&:hover": {
+                      backgroundColor: darkMode
+                        ? "rgba(255,255,255,0.05)"
+                        : "rgba(0,0,0,0.04)",
+                    },
+                    transition: "background 0.15s",
+                  }}
+                >
+                  {darkMode ? (
+                    <DarkModeIcon
+                      sx={{ fontSize: 16, color: "text.secondary" }}
                     />
-                  }
-                  label={darkMode ? "🌙 Dark Mode" : "☀️ Light Mode"}
-                  sx={{ color: "white" }}
-                />
-              </Grid>
-            </Grid>
+                  ) : (
+                    <LightModeIcon
+                      sx={{ fontSize: 16, color: "text.secondary" }}
+                    />
+                  )}
+                  <Typography variant="caption" color="text.secondary">
+                    {darkMode ? "Dark" : "Light"}
+                  </Typography>
+                </Box>
+              </Tooltip>
+            </Box>
           </Container>
         </Box>
 
-        {/* Main Content */}
-        <Container maxWidth="lg" sx={{ py: 6 }}>
+        <Container maxWidth="lg" sx={{ py: 4 }}>
           {/* Search Section */}
-          <Card
-            elevation={3}
-            sx={{
-              p: 4,
-              mb: 4,
-              backgroundColor: theme.palette.background.paper,
-            }}
-          >
-            <Typography variant="h5" gutterBottom fontWeight={600} mb={3}>
-              🎮 Choose a game you love
+          <Card sx={{ p: 3, mb: 3 }}>
+            <Typography variant="body2" color="text.secondary" mb={1.5}>
+              Enter a game you love and we'll find similar ones
             </Typography>
 
-            <Autocomplete
-              options={gameOptions}
-              freeSolo
-              value={selectedGame}
-              inputValue={inputValue}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label="Search for a game..."
+            <Box
+              display="flex"
+              gap={1.5}
+              flexDirection={{ xs: "column", sm: "row" }}
+            >
+              <Autocomplete
+                sx={{ flex: 1 }}
+                options={visibleGameOptions}
+                freeSolo
+                value={selectedGame}
+                inputValue={inputValue}
+                filterOptions={(options) => options}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    placeholder="e.g. The Witcher 3, Minecraft, Cyberpunk 2077…"
+                    variant="outlined"
+                    size="small"
+                    InputProps={{
+                      ...params.InputProps,
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <SearchIcon color="action" fontSize="small" />
+                        </InputAdornment>
+                      ),
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleRecommend();
+                    }}
+                  />
+                )}
+                onChange={(_, newValue) => {
+                  setSelectedGame(newValue || "");
+                  setInputValue(newValue || "");
+                  setShowRecommendations(false);
+                }}
+                onInputChange={(_, newValue) => {
+                  setInputValue(newValue);
+                  setShowRecommendations(false);
+                }}
+                openOnFocus
+                ListboxProps={{ style: { maxHeight: "300px" } }}
+                renderOption={(props, option) => {
+                  const { key, ...rest } = props;
+                  return (
+                    <Box component="li" key={key} {...rest}>
+                      <SportsEsportsIcon
+                        sx={{ mr: 1, fontSize: 18, color: "text.secondary" }}
+                      />
+                      {option}
+                    </Box>
+                  );
+                }}
+              />
+
+              <Button
+                variant="contained"
+                size="medium"
+                onClick={() => handleRecommend()}
+                startIcon={<AutoAwesomeIcon />}
+                disabled={!selectedGame && !inputValue}
+                sx={{
+                  px: 3,
+                  background: "#3C3489",
+                  whiteSpace: "nowrap",
+                  "&:hover": { background: "#26215C" },
+                  "&:disabled": { opacity: 0.5 },
+                }}
+              >
+                Find games
+              </Button>
+            </Box>
+
+            {/* Quick picks */}
+            <Box
+              display="flex"
+              alignItems="center"
+              gap={1}
+              mt={1.5}
+              flexWrap="wrap"
+            >
+              <Typography variant="caption" color="text.disabled">
+                Try:
+              </Typography>
+              {QUICK_PICKS.map((name) => (
+                <Chip
+                  key={name}
+                  label={name}
+                  size="small"
                   variant="outlined"
-                  fullWidth
-                  placeholder="e.g., The Witcher 3, Minecraft, Cyberpunk 2077"
-                  InputProps={{
-                    ...params.InputProps,
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <SearchIcon color="primary" />
-                      </InputAdornment>
-                    ),
+                  onClick={() => handleRecommend(name)}
+                  icon={<SportsEsportsIcon style={{ fontSize: 13 }} />}
+                  sx={{
+                    fontSize: 11,
+                    height: 24,
+                    cursor: "pointer",
+                    "&:hover": {
+                      borderColor: "#534AB7",
+                      color: "#3C3489",
+                      backgroundColor: "#EEEDFE",
+                    },
                   }}
                 />
-              )}
-              onChange={(event, newValue) => {
-                // This handles selection from dropdown
-                setSelectedGame(newValue || "");
-                setInputValue(newValue || "");
-                setShowRecommendations(false);
-              }}
-              onInputChange={(event, newValue) => {
-                // This handles typing in the input
-                setInputValue(newValue);
-                setShowRecommendations(false);
-              }}
-              // Show suggestions as user types
-              openOnFocus
-              // Limit the number of visible options for better UX
-              ListboxProps={{
-                style: { maxHeight: "300px" },
-              }}
-              // Fixed: renderOption now handles string options correctly
-              renderOption={(props, option) => {
-                // Destructure key from props
-                const { key, ...otherProps } = props;
-                return (
-                  <Box component="li" key={key} {...otherProps}>
-                    <SportsEsportsIcon
-                      sx={{ mr: 1, fontSize: 20, color: "text.secondary" }}
-                    />
-                    {option}
-                  </Box>
-                );
-              }}
-            />
-
-            <Button
-              variant="contained"
-              size="large"
-              disabled={!selectedGame && !inputValue}
-              onClick={handleRecommend}
-              startIcon={<RocketLaunchIcon />}
-              sx={{
-                marginTop: 3,
-                px: 4,
-                py: 1.5,
-                fontWeight: "bold",
-                fontSize: "1.1rem",
-                background: "linear-gradient(45deg, #667eea 30%, #764ba2 90%)",
-                boxShadow: "0 3px 5px 2px rgba(102, 126, 234, . 3)",
-                "&:hover": {
-                  background:
-                    "linear-gradient(45deg, #764ba2 30%, #667eea 90%)",
-                  transform: "translateY(-2px)",
-                  boxShadow: "0 5px 10px 2px rgba(102, 126, 234, .4)",
-                },
-                transition: "all 0.3s ease",
-              }}
-            >
-              Get Recommendations
-            </Button>
+              ))}
+            </Box>
           </Card>
 
-          {/* Loading State */}
-          {isLoading && (
-            <Fade in={isLoading}>
-              <Box textAlign="center" py={6}>
-                <CircularProgress size={60} thickness={4} />
-                <Typography variant="h6" mt={3} color="text.secondary">
-                  Finding the best games for you...
+          {/* Results Header */}
+          {showRecommendations && (
+            <Box
+              display="flex"
+              alignItems="baseline"
+              justifyContent="space-between"
+              mb={2}
+            >
+              <Typography variant="h6">
+                {isLoading
+                  ? `Searching for "${inputValue}"…`
+                  : `Based on "${inputValue}"`}
+              </Typography>
+              {!isLoading && recommendations.length > 0 && (
+                <Typography variant="caption" color="text.secondary">
+                  {recommendations.length} games found
                 </Typography>
-              </Box>
-            </Fade>
+              )}
+            </Box>
           )}
 
-          {/* Recommendations */}
+          {/* Skeleton Loading */}
+          {isLoading && (
+            <Grid container spacing={2}>
+              {Array(6)
+                .fill(0)
+                .map((_, i) => (
+                  <Grid item xs={12} sm={6} md={4} key={i}>
+                    <Card sx={{ p: 2 }}>
+                      <Box
+                        display="flex"
+                        justifyContent="space-between"
+                        mb={1.5}
+                      >
+                        <Skeleton variant="text" width="60%" height={20} />
+                        <Skeleton variant="rounded" width={42} height={26} />
+                      </Box>
+                      <Skeleton
+                        variant="rounded"
+                        height={52}
+                        sx={{ mb: 1.5 }}
+                      />
+                      <Box display="flex" gap={1} mb={1.5}>
+                        <Skeleton variant="text" width={60} />
+                        <Skeleton variant="text" width={80} />
+                      </Box>
+                      <Box display="flex" gap={0.75}>
+                        <Skeleton variant="rounded" width={60} height={22} />
+                        <Skeleton variant="rounded" width={50} height={22} />
+                        <Skeleton variant="rounded" width={55} height={22} />
+                      </Box>
+                      <Box
+                        display="flex"
+                        justifyContent="space-between"
+                        mt={1.5}
+                        pt={1.5}
+                        sx={{ borderTop: "0.5px solid rgba(0,0,0,0.07)" }}
+                      >
+                        <Skeleton variant="text" width={50} />
+                        <Skeleton variant="text" width={80} />
+                      </Box>
+                    </Card>
+                  </Grid>
+                ))}
+            </Grid>
+          )}
+
+          {/* Recommendation Cards */}
           {showRecommendations && !isLoading && recommendations.length > 0 && (
-            <Fade in={showRecommendations}>
-              <Box>
-                <Typography variant="h4" gutterBottom fontWeight={700} mb={3}>
-                  🎯 Recommended Games
-                </Typography>
-                <Grid container spacing={3}>
-                  {recommendations.map((game, index) => (
-                    <Grid item xs={12} md={6} lg={4} key={index}>
-                      <Card
-                        elevation={2}
+            <Fade in>
+              <Grid container spacing={2}>
+                {recommendations.map((game, index) => (
+                  <Grid item xs={12} sm={6} md={4} key={index}>
+                    <Card
+                      sx={{
+                        height: "100%",
+                        display: "flex",
+                        flexDirection: "column",
+                        transition: "all 0.2s",
+                        "&:hover": {
+                          transform: "translateY(-4px)",
+                          borderColor: "#AFA9EC !important",
+                        },
+                      }}
+                    >
+                      <CardContent
                         sx={{
-                          height: "100%",
+                          flexGrow: 1,
                           display: "flex",
                           flexDirection: "column",
-                          transition: "all 0.3s ease",
-                          "&:hover": {
-                            transform: "translateY(-8px)",
-                            boxShadow: 8,
-                          },
+                          gap: 1.25,
+                          p: 2,
+                          "&:last-child": { pb: 2 },
                         }}
                       >
-                        <CardContent sx={{ flexGrow: 1 }}>
+                        {/* Name + Score */}
+                        <Box
+                          display="flex"
+                          alignItems="flex-start"
+                          justifyContent="space-between"
+                          gap={1}
+                        >
                           <Typography
-                            variant="h6"
-                            gutterBottom
+                            variant="body1"
                             fontWeight={600}
+                            lineHeight={1.3}
                           >
                             {game.name || "N/A"}
                           </Typography>
-
-                          <Box
-                            display="flex"
-                            alignItems="center"
-                            gap={1}
-                            mb={1}
-                          >
-                            <CalendarMonthIcon
-                              fontSize="small"
-                              color="action"
-                            />
-                            <Typography variant="body2" color="text.secondary">
-                              {game.release_date || "Unknown"}
-                            </Typography>
-                          </Box>
-
-                          <Box
-                            display="flex"
-                            alignItems="center"
-                            gap={1}
-                            mb={2}
-                          >
-                            <AttachMoneyIcon fontSize="small" color="action" />
-                            <Typography variant="body2" color="text.secondary">
-                              {game.price || "N/A"}
-                            </Typography>
-                          </Box>
-
                           {game.score && (
                             <Box
-                              display="flex"
-                              alignItems="center"
-                              gap={1}
-                              mb={2}
+                              sx={{
+                                minWidth: 44,
+                                height: 26,
+                                borderRadius: "6px",
+                                backgroundColor: getScoreBg(game.score),
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                flexShrink: 0,
+                              }}
                             >
-                              <Chip
-                                icon={<StarIcon />}
-                                label={`${game.score}%`}
-                                color={getScoreColor(game.score)}
-                                size="small"
-                              />
-                            </Box>
-                          )}
-
-                          {game.genres && (
-                            <Box mb={1}>
                               <Typography
-                                variant="caption"
-                                color="text.secondary"
-                                display="block"
-                                mb={0.5}
+                                sx={{
+                                  fontSize: 12,
+                                  fontWeight: 600,
+                                  color: getScoreText(game.score),
+                                }}
                               >
-                                Genres:
+                                {game.score}%
                               </Typography>
-                              <Box display="flex" gap={0.5} flexWrap="wrap">
-                                {game.genres
-                                  .split(",")
-                                  .slice(0, 3)
-                                  .map((genre, i) => (
-                                    <Chip
-                                      key={i}
-                                      label={genre.trim()}
-                                      size="small"
-                                      variant="outlined"
-                                      color="primary"
-                                    />
-                                  ))}
-                              </Box>
                             </Box>
                           )}
+                        </Box>
 
-                          {game.tags && (
-                            <Box>
-                              <Typography
-                                variant="caption"
-                                color="text.secondary"
-                                display="block"
-                                mb={0.5}
-                              >
-                                Tags:
-                              </Typography>
-                              <Box display="flex" gap={0.5} flexWrap="wrap">
-                                {game.tags
-                                  .split(",")
-                                  .slice(0, 3)
-                                  .map((tag, i) => (
-                                    <Chip
-                                      key={i}
-                                      label={tag.trim()}
-                                      size="small"
-                                      variant="outlined"
-                                      color="secondary"
-                                    />
-                                  ))}
-                              </Box>
-                            </Box>
-                          )}
-
-                          {game.reviews && (
+                        {/* Recommendation reason */}
+                        {game.reason && (
+                          <Box
+                            sx={{
+                              p: 1.25,
+                              borderRadius: "8px",
+                              backgroundColor: darkMode
+                                ? "rgba(174,169,236,0.08)"
+                                : "#F5F4FF",
+                              borderLeft: "2px solid #AFA9EC",
+                            }}
+                          >
                             <Typography
                               variant="caption"
                               color="text.secondary"
-                              mt={2}
-                              display="block"
+                              lineHeight={1.5}
                             >
-                              📝 {game.reviews} reviews
+                              {game.reason}
                             </Typography>
-                          )}
+                          </Box>
+                        )}
 
-                          {game.popularity && (
-                            <Typography
-                              variant="caption"
-                              color="text. secondary"
-                              display="block"
-                            >
-                              🔥 Popularity: {game.popularity}
+                        {/* Meta row */}
+                        <Box display="flex" gap={2}>
+                          {game.release_date && (
+                            <Box display="flex" alignItems="center" gap={0.5}>
+                              <CalendarMonthIcon
+                                sx={{ fontSize: 13, color: "text.disabled" }}
+                              />
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                              >
+                                {game.release_date}
+                              </Typography>
+                            </Box>
+                          )}
+                          {game.reviews && (
+                            <Box display="flex" alignItems="center" gap={0.5}>
+                              <ChatBubbleOutlineIcon
+                                sx={{ fontSize: 13, color: "text.disabled" }}
+                              />
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                              >
+                                {game.reviews} reviews
+                              </Typography>
+                            </Box>
+                          )}
+                        </Box>
+
+                        {/* Tags */}
+                        <Box display="flex" gap={0.75} flexWrap="wrap">
+                          {game.genres &&
+                            game.genres
+                              .split(",")
+                              .slice(0, 2)
+                              .map((g, i) => (
+                                <Chip
+                                  key={i}
+                                  label={g.trim()}
+                                  size="small"
+                                  sx={{
+                                    height: 22,
+                                    fontSize: 11,
+                                    backgroundColor: darkMode
+                                      ? "#0a2018"
+                                      : "#E1F5EE",
+                                    color: darkMode ? "#5EC4A8" : "#0F6E56",
+                                    border: "none",
+                                  }}
+                                />
+                              ))}
+                          {game.tags &&
+                            game.tags
+                              .split(",")
+                              .slice(0, 2)
+                              .map((t, i) => (
+                                <Chip
+                                  key={i}
+                                  label={t.trim()}
+                                  size="small"
+                                  sx={{
+                                    height: 22,
+                                    fontSize: 11,
+                                    backgroundColor: darkMode
+                                      ? "#1a1836"
+                                      : "#EEEDFE",
+                                    color: darkMode ? "#9B8FE8" : "#3C3489",
+                                    border: "none",
+                                  }}
+                                />
+                              ))}
+                        </Box>
+
+                        {/* Footer */}
+                        <Box
+                          display="flex"
+                          alignItems="center"
+                          justifyContent="space-between"
+                          mt="auto"
+                          pt={1.25}
+                          sx={{
+                            borderTop: darkMode
+                              ? "0.5px solid rgba(255,255,255,0.07)"
+                              : "0.5px solid rgba(0,0,0,0.07)",
+                          }}
+                        >
+                          <Box display="flex" alignItems="center" gap={0.5}>
+                            <AttachMoneyIcon
+                              sx={{ fontSize: 14, color: "text.secondary" }}
+                            />
+                            <Typography variant="body2" fontWeight={500}>
+                              {game.price || "N/A"}
+                            </Typography>
+                          </Box>
+                          {game.score && (
+                            <Typography variant="caption" color="text.disabled">
+                              {game.score >= 85
+                                ? "⭐ Highly rated"
+                                : game.score >= 70
+                                  ? "Well rated"
+                                  : "Mixed reviews"}
                             </Typography>
                           )}
-                        </CardContent>
-                      </Card>
-                    </Grid>
-                  ))}
-                </Grid>
-              </Box>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                ))}
+              </Grid>
             </Fade>
           )}
 
-          {/* No Results */}
+          {/* Empty State */}
           {showRecommendations &&
             !isLoading &&
             recommendations.length === 0 && (
-              <Fade in={showRecommendations}>
-                <Card elevation={2} sx={{ p: 6, textAlign: "center" }}>
-                  <Typography variant="h5" gutterBottom color="text.secondary">
-                    😔 No recommendations found
+              <Fade in>
+                <Card sx={{ p: 6, textAlign: "center" }}>
+                  <SportsEsportsIcon
+                    sx={{ fontSize: 48, color: "text.disabled", mb: 2 }}
+                  />
+                  <Typography variant="h6" color="text.secondary" gutterBottom>
+                    No recommendations found
                   </Typography>
-                  <Typography variant="body1" color="text.secondary">
-                    Try searching for a different game!
+                  <Typography variant="body2" color="text.disabled" mb={3}>
+                    We couldn't find games similar to "{inputValue}". Try a
+                    different title.
                   </Typography>
+                  <Button
+                    variant="outlined"
+                    onClick={() => {
+                      setShowRecommendations(false);
+                      setInputValue("");
+                      setSelectedGame("");
+                    }}
+                  >
+                    Try another game
+                  </Button>
                 </Card>
               </Fade>
             )}
+
+          {/* Initial empty state (before any search) */}
+          {!showRecommendations && (
+            <Fade in>
+              <Card sx={{ p: 5, textAlign: "center", mt: 1 }}>
+                <RocketLaunchIcon
+                  sx={{ fontSize: 40, color: "text.disabled", mb: 1.5 }}
+                />
+                <Typography
+                  variant="body1"
+                  fontWeight={500}
+                  color="text.secondary"
+                >
+                  Your recommendations will appear here
+                </Typography>
+              </Card>
+            </Fade>
+          )}
         </Container>
 
-        {/* Snackbar for notifications */}
         <Snackbar
           open={notification.open}
           autoHideDuration={4000}
@@ -493,8 +723,8 @@ export default function HomePage() {
           <Alert
             onClose={handleCloseNotification}
             severity={notification.severity}
-            sx={{ width: "100%" }}
             variant="filled"
+            sx={{ width: "100%" }}
           >
             {notification.message}
           </Alert>
