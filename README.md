@@ -21,7 +21,7 @@ A modern, responsive React-based frontend application that helps users discover 
 The application allows users to:
 
 1. Search for a game they love using the autocomplete search bar
-2. Get AI-powered recommendations based on their selection
+2. Get recommendations based on their selection
 3. View detailed information about recommended games including:
    - Game scores with color-coded ratings
    - Release dates
@@ -35,14 +35,14 @@ The application allows users to:
 - **Material-UI** 7.0.2 - Component library
 - **React Router** 7.0.2 - Navigation
 - **Axios** - HTTP client for API requests
-- **TanStack Query** - Data fetching and caching
+- **TanStack Query** - Installed for future data caching enhancements
 - **Emotion** - CSS-in-JS styling
 
 ## 📋 Prerequisites
 
 Before you begin, ensure you have the following installed:
 
-- [Node.js](https://nodejs.org/) (v14 or higher)
+- [Node.js](https://nodejs.org/) (v18 or higher)
 - [npm](https://www.npmjs.com/) or [yarn](https://yarnpkg.com/)
 - A running Flask backend (see Backend Setup section)
 
@@ -63,15 +63,9 @@ Before you begin, ensure you have the following installed:
 
 3. **Configure the backend URL** (if needed)
 
-The application reads the backend URL from `REACT_APP_API_URL`.
+By default, the frontend calls `http://127.0.0.1:5000`.
 
-For local development, you can leave it unset and it will fall back to `http://127.0.0.1:5000`.
-
-For Vercel, set `REACT_APP_API_URL` to your Render backend URL, for example:
-
-```bash
-REACT_APP_API_URL=https://your-backend.onrender.com
-```
+If your backend runs elsewhere, update `baseURL` in `src/utils/api.js`.
 
 The shared axios client is configured in `src/utils/api.js`.
 
@@ -132,7 +126,7 @@ This frontend requires a Flask backend to function. The backend should provide t
        {
          "name": "Game Name",
          "release_date": "2020-01-01",
-         "price": "$59.99",
+         "price": "RM59.99",
          "score": 85,
          "genres": "Action, RPG, Adventure",
          "tags": "Open World, Story Rich, Fantasy",
@@ -145,28 +139,10 @@ This frontend requires a Flask backend to function. The backend should provide t
 
 Make sure your Flask backend is running on `http://127.0.0.1:5000` before starting the frontend.
 
-## 🌍 Deployment Notes
-
-If you deploy the frontend to Vercel and the backend to Render:
-
-1. Add `REACT_APP_API_URL` in Vercel with your Render backend URL.
-2. Enable CORS on the Flask backend so your Vercel domain can make requests to Render.
-3. Redeploy the Vercel app after updating the environment variable.
-
-Typical Flask CORS setup on Render looks like this:
-
-```python
-from flask_cors import CORS
-
-CORS(app, origins=["https://your-vercel-app.vercel.app"])
-```
-
-If you are testing locally, `http://localhost:3000` can still call `http://127.0.0.1:5000` directly.
-
 ## 📁 Project Structure
 
 ```
-gameRecommender_frontEnd/
+game_recommender/
 ├── public/
 │   ├── index.html          # HTML template
 │   └── ...
@@ -201,7 +177,7 @@ gameRecommender_frontEnd/
 
 - Switch between light and dark modes
 - Smooth transitions between themes
-- Persistent gradient header design
+- Consistent top bar and card styling across themes
 
 ### Responsive Cards
 
@@ -215,7 +191,7 @@ Contributions, issues, and feature requests are welcome!
 
 ## 📝 License
 
-This project is open source and available under the [MIT License](LICENSE).
+No license file is currently included in this repository.
 
 ## 👤 Author
 
